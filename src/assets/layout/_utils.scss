@@ -1,0 +1,77 @@
+/* Utils */
+.clearfix:after {
+    content: ' ';
+    display: block;
+    clear: both;
+}
+
+.card {
+    background: var(--surface-card);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    border-radius: var(--content-border-radius);
+
+    &:last-child {
+        margin-bottom: 0;
+    }
+}
+
+.p-toast {
+    &.p-toast-top-right,
+    &.p-toast-top-left,
+    &.p-toast-top-center {
+        top: 100px;
+    }
+}
+
+.p-datatable-header-cell {
+    /* background: #2A79E3 !important;
+    color: #fff !important; */
+}
+
+.text-primary {
+    color: #2A79E3 !important;
+}
+
+.p-paginator-page.p-paginator-page-selected {
+    background: var(--p-paginator-nav-button-selected-background);
+    color: #2A79E3 !important;
+}
+
+.p-step:has(~ .p-step-active) .p-stepper-separator {
+    background: #2A79E3 !important;
+}
+
+.p-step-active .p-step-title {
+    color: #2A79E3 !important;
+}
+
+.p-step-active .p-step-number {
+    background: var(--p-stepper-step-number-active-background);
+    border-color: var(--p-stepper-step-number-active-border-color);
+    color: #2A79E3 !important;
+}
+
+.p-button-info {
+    background: #2A79E3 !important;
+    border: 1px solid var(--p-button-info-border-color);
+}
+
+.p-radiobutton-checked .p-radiobutton-box {
+    border-color: #2A79E3 !important;
+    background: #2A79E3 !important;
+}
+
+.p-select-option.p-select-option-selected {
+    background: #ecf6fd !important;
+    color: #2A79E3 !important;
+}
+
+.p-select:not(.p-disabled).p-focus {
+    border-color: #2A79E3 !important;
+}
+
+.bg-surface-50 {
+    --tw-bg-opacity: 1;
+    background-color: transparent !important;
+}

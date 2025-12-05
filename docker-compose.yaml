@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  grasi-fe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - VITE_API_URL=http://localhost:5000/api
+      - VITE_API_URL2=http://localhost:5000/api
+    container_name: grasi-fe
+    volumes:
+      - ./:/usr/share/nginx/html
+    ports:
+      - "5001:5001"

@@ -1,0 +1,47 @@
+html {
+    height: 100%;
+    font-size: 14px;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    color: var(--text-color);
+    background-color: var(--surface-ground);
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+    text-decoration: none;
+}
+
+.layout-wrapper {
+    min-height: 100vh;
+}
+
+.p-toast-detail {
+    margin-bottom: 20px !important;
+    font-weight: var(--p-toast-detail-font-weight);
+    font-size: 18px !important;
+}
+.p-toast {
+    top: 50% !important;
+    left: 55% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 30vw !important;
+}
+.p-toast-summary {
+    font-weight: var(--p-toast-summary-font-weight);
+    font-size: 22px !important;
+    margin-top: 20px !important;
+}
+.p-toast-message-icon {
+    padding-top: 20px;
+    flex-shrink: 0;
+    font-size: 20px !important;
+    width: 20px !important;
+    height: 20px !important;
+}
