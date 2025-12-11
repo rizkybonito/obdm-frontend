@@ -12,11 +12,11 @@ RUN npm install
 
 COPY . .
 
-COPY .env.dev .env
+COPY .env .env
 
 RUN npm run build
 
-EXPOSE 5001
+EXPOSE 5173
 
 RUN npm install -g serve
 

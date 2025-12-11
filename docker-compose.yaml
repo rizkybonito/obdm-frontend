@@ -1,15 +1,20 @@
-version: '3.8'
-
 services:
-  grasi-fe:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  vue-app:
+    container_name: obdm-frontend
+    image: node:18-alpine
+    working_dir: /app
+
     environment:
-      - VITE_API_URL=http://localhost:5000/api
-      - VITE_API_URL2=http://localhost:5000/api
-    container_name: grasi-fe
+      VITE_API_URL: http://10.10.6.50:9891
+      VITE_API_URL2: http://localhost:5000/api
+      CHOKIDAR_USEPOLLING: "true"
+
     volumes:
-      - ./:/usr/share/nginx/html
+      - .:/app
+
     ports:
-      - "5001:5001"
+      - "5173:5173"
+
+    command: sh -c "npm install && npm run dev -- --host"
+
+    restart: unless-stopped
