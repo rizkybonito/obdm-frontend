@@ -34,6 +34,7 @@ const handleLogin = async () => {
         });
         if (response.data.token) {
             authStore.setToken(response.data.token);
+            authStore.setClusterName(response.data.cluster_name);
             authStore.setUser(response.data.username);
             await router.push('/dashboard');
         } else {

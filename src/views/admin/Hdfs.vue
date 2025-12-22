@@ -1,115 +1,98 @@
 <script setup>
-import { useLayout } from '@/layout/composables/layout';
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import axiosInstancesPython from '@/axiosInstancesPython';
 import { useAuthStore } from '@/stores/authStore';
+import SummaryTab from './hdfs/SummaryTab.vue';
+import QuickLinksTab from './hdfs/QuickLinksTab.vue';
 
 const authStore = useAuthStore();
+const router = useRouter();
 const links = ref([]);
+const loading = ref(false);
+const activeTab = ref('summary');
 
-const fetchQuickLink = async () => {
+const fetchData = async () => {
+    loading.value = true;
     try {
         const response = await axiosInstancesPython.get('/quicklink', {
-            params: {
-                service: 'HDFS'
-            }
+            params: { service: 'HDFS' }
         });
         links.value = response.data.items[0].QuickLinkInfo.quicklink_data.QuickLinksConfiguration.configuration.links;
     } catch (error) {
-        if (error.status == 401) {
+        if (error.response?.status === 401) {
             authStore.clearToken();
             router.push('/auth/login');
         }
-        console.error(error);
-    }
-};
-
-const fetchComponentService = async () => {
-    try {
-        const response = await axiosInstancesPython.get('/component-services', {
-            params: {
-                service: 'YARN'
-            }
-        });
-        links.value = response.data.items.length > 0 ? response.data.items[0].QuickLinkInfo.quicklink_data.QuickLinksConfiguration.configuration.links : [];
-    } catch (error) {
-        if (error.status == 401) {
-            authStore.clearToken();
-            router.push('/auth/login');
-        }
-        console.error(error);
+    } finally {
+        loading.value = false;
     }
 };
 
 onMounted(() => {
-    fetchQuickLink();
-    fetchComponentService();
+    fetchData();
 });
-
-
 </script>
 
 <template>
-    <div class="row">
-        <div class="column-left">
-            <div class="col-span-12">
-                <div>
-                    <div class="font-semibold text-xl mt-2 ml-2 mb-2">Summary</div>
-                </div>
-            </div>
-            <div class="mb-4">
-                <div class="card" style="height: 77vh;">
-
-                </div>
-            </div>
+    <div class="p-4">
+        <div class="flex gap-2 mb-4 border-b border-gray-200">
+            <button 
+                @click="activeTab = 'summary'"
+                :class="['tab-btn', activeTab === 'summary' ? 'active' : '']"
+            >
+                Status
+            </button>
+            <button 
+                @click="activeTab = 'instance'"
+                :class="['tab-btn', activeTab === 'instance' ? 'active' : '']"
+            >
+                Instances
+            </button>
+            <button 
+                @click="activeTab = 'configuration'"
+                :class="['tab-btn', activeTab === 'configuration' ? 'active' : '']"
+            >
+                Configuration
+            </button>
+            <button 
+                @click="activeTab = 'links'"
+                :class="['tab-btn', activeTab === 'links' ? 'active' : '']"
+            >
+                Quick Links
+            </button>
         </div>
-        <div class="column-right">
-            <div class="col-span-12">
-                <div>
-                    <div class="font-semibold text-xl mt-2 ml-2 mb-2">Quick Links</div>
-                </div>
-            </div>
-            <div class="card" style="height: 77vh;">
-                <DataTable ref="dt" :value="links" dataKey="id" :paginator="false" :rows="links.length" style="border-color: transparent !important;"
-                    :totalRecords="links.length" :loading="loading" class="mb-4">
-                    <template style="border-color: transparent !important;" #empty> Data not found. </template>
-                    <template style="border-color: transparent !important;" #loading> Loading data. Please wait. </template>
-                    <Column style="border-color: transparent !important; padding: 3px !important;">
-                        <template #body="{ data }">
-                            <div class="flex items-center gap-2">
-                                <a href="" style="color: #1BA9E1;">{{ data.label }}</a>
-                            </div>
-                        </template>
-                    </Column>
-                </DataTable>
-            </div>
+
+        <div class="tab-container">
+            <SummaryTab v-if="activeTab === 'summary'" />
+            
+            <QuickLinksTab 
+                v-if="activeTab === 'links'" 
+                :links="links" 
+                :loading="loading" 
+            />
         </div>
     </div>
 </template>
 
 <style scoped lang="scss">
-.column-left {
-    float: left;
-    width: 75%;
-    padding-right: 2rem;
-}
+.tab-btn {
+    padding: 0.5rem 1.5rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-weight: 600;
+    color: #6c757d;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
 
-.column-right {
-    float: left;
-    width: 25%;
-}
-
-.row:after {
-    content: "";
-    display: table;
-    clear: both;
-}
-
-@media screen and (max-width: 600px) {
-
-    .column-left,
-    .column-right {
-        width: 100%;
+    &.active {
+        color: #1BA9E1;
+        border-bottom: 2px solid #1BA9E1;
+    }
+    
+    &:hover:not(.active) {
+        background: #f8f9fa;
     }
 }
 </style>

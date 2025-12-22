@@ -693,7 +693,7 @@ watch([getPrimary, getSurface, isDarkTheme], () => {
                     <div class="column-left">
                         <div class="col-span-12">
                             <div>
-                                <div class="font-semibold text-xl mt-4 ml-2 mb-8">ONYXDEV_CLUSTER</div>
+                                <div class="font-semibold text-xl mt-4 ml-2 mb-8">{{ authStore.clusterName }}</div>
                             </div>
                         </div>
                         <div class="mb-4">
