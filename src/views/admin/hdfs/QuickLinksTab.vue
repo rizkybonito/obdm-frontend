@@ -1,13 +1,13 @@
 <template>
-    <div class="card" style="height: 77vh;">
-        <div class="font-semibold text-xl mb-4">Quick Links</div>
+    <div class="card" style="height: 60vh;">
+        <div class="font-semibold text-xl">Quick Links</div>
         <DataTable 
             :value="links" 
             dataKey="id" 
             :paginator="false" 
             :rows="links.length" 
             :loading="loading"
-            class="mb-4 custom-table"
+            class="mb-1 custom-table"
         >
             <template #empty> Data not found. </template>
             <template #loading> Loading data. Please wait. </template>
