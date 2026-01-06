@@ -142,9 +142,6 @@ The result is stored in the `dist/` directory.
 -   Run Vite with `--host`:
     npm run dev -- --host
 
-### Permission issues?
-
-    docker compose down -v
 
 ------------------------------------------------------------------------
 

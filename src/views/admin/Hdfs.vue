@@ -3,15 +3,20 @@ import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import axiosInstancesPython from '@/axiosInstancesPython';
 import { useAuthStore } from '@/stores/authStore';
+
 import SummaryTab from './hdfs/SummaryTab.vue';
-import QuickLinksTab from './hdfs/QuickLinksTab.vue';
 import Metrics from './hdfs/Metric.vue';
+import Instances from './hdfs/Instances.vue';
+import Configurations from './hdfs/Configurations.vue';
 
 const authStore = useAuthStore();
 const router = useRouter();
-const links = ref([]);
+
+const menu = ref(null);
+const formattedLinks = ref([]); 
 const loading = ref(false);
 const activeTab = ref('summary');
+
 const diskUsage = ref([]);
 const hdfsUsage = ref(null);
 const nameNodeHeap = ref(null);
@@ -21,13 +26,26 @@ const namenodeRpc = ref(0);
 const namenodeCpuWio = ref(0);
 const namenodeTime = ref('');
 
+const toggleMenu = (event) => {
+    menu.value.toggle(event);
+};
+
 const fetchData = async () => {
     loading.value = true;
     try {
         const response = await axiosInstancesPython.get('/quicklink', {
             params: { service: 'HDFS' }
         });
-        links.value = response.data.items[0].QuickLinkInfo.quicklink_data.QuickLinksConfiguration.configuration.links;
+        
+        const rawLinks = response.data.items[0].QuickLinkInfo.quicklink_data.QuickLinksConfiguration.configuration.links;
+        formattedLinks.value = rawLinks.map(link => ({
+            label: link.label,
+            icon: 'pi pi-external-link',
+            command: () => {
+                window.open(link.url, '_blank');
+            }
+        }));
+        
     } catch (error) {
         if (error.response?.status === 401) {
             authStore.clearToken();
@@ -41,72 +59,43 @@ const fetchData = async () => {
 const fetchServiceInfo = async () => {
     try {
         const response = await axiosInstancesPython.get('/service-info');
-        let temp = response.data.items.filter((item) => item.ServiceComponentInfo.service_name == 'HDFS' && item.ServiceComponentInfo.component_name == 'NAMENODE');
-        let tempNameNodeHeap1 = temp[0]?.host_components[0]?.metrics?.jvm ? ((temp[0].host_components[0].metrics.jvm.HeapMemoryUsed / temp[0].host_components[0].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0.00
-        let tempNameNodeHeap2 = temp[0]?.host_components[1]?.metrics?.jvm ? ((temp[0].host_components[1].metrics.jvm.HeapMemoryUsed / temp[0].host_components[1].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0.00
-        nameNodeHeap.value = tempNameNodeHeap1 != 0.00 ? tempNameNodeHeap1 : tempNameNodeHeap2;        
-        
-        diskUsage.value.push(temp[0].host_components[0]?.metrics?.dfs ? (temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityTotalGB - temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityRemainingGB) / temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityTotalGB * 100 : 0);
-        hdfsUsage.value = temp[0].host_components[0]?.metrics?.dfs ? ((temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityTotalGB - temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityRemainingGB) / temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityTotalGB * 100).toFixed() : 0;
-        diskUsage.value.push(temp[0].host_components[0]?.metrics?.dfs ? temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityRemainingGB / temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityTotalGB * 100 : 0);
-        if (temp[0].host_components[0].metrics?.dfs) {
-            let strLiveNodes = temp[0].host_components[0].metrics.dfs.namenode.LiveNodes;
-            let tempLiveNodes = JSON.parse(strLiveNodes)
-            let arrLiveNodes = Object.values(tempLiveNodes)
-            let tempLive = arrLiveNodes.filter(live => live.adminState == "In Service");
-            dataNodes.value = arrLiveNodes.length
-            liveDataNodes.value = tempLive.length
-        }
-        else {
-            dataNodes.value = 0
-            liveDataNodes.value = 0
-        }
-        const hostComponent = (temp[0].host_components[1] && temp[0].host_components[1].metrics) ||
-            (temp[0].host_components[0] && temp[0].host_components[0].metrics);
+        let temp = response.data.items.filter((item) => 
+            item.ServiceComponentInfo.service_name == 'HDFS' && 
+            item.ServiceComponentInfo.component_name == 'NAMENODE'
+        );
 
-        const namenodeCpuWioValue = hostComponent?.cpu?.cpu_wio ?? 0;
+        let tempHeap1 = temp[0]?.host_components[0]?.metrics?.jvm ? ((temp[0].host_components[0].metrics.jvm.HeapMemoryUsed / temp[0].host_components[0].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0;
+        let tempHeap2 = temp[0]?.host_components[1]?.metrics?.jvm ? ((temp[0].host_components[1].metrics.jvm.HeapMemoryUsed / temp[0].host_components[1].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0;
+        nameNodeHeap.value = tempHeap1 != 0 ? tempHeap1 : tempHeap2;
 
-        namenodeCpuWio.value = namenodeCpuWioValue;
+        if (temp[0]?.host_components[0]?.metrics?.dfs) {
+            const dfs = temp[0].host_components[0].metrics.dfs.FSNamesystem;
+            const used = ((dfs.CapacityTotalGB - dfs.CapacityRemainingGB) / dfs.CapacityTotalGB * 100).toFixed(0);
+            hdfsUsage.value = used;
+            diskUsage.value = [used, (100 - used)];
+            
+            let liveNodes = JSON.parse(temp[0].host_components[0].metrics.dfs.namenode.LiveNodes);
+            let arrLiveNodes = Object.values(liveNodes);
+            dataNodes.value = arrLiveNodes.length;
+            liveDataNodes.value = arrLiveNodes.filter(n => n.adminState === "In Service").length;
+        }
+
+        const hostComp = (temp[0].host_components[1]?.metrics) || (temp[0].host_components[0]?.metrics);
+        namenodeCpuWio.value = hostComp?.cpu?.cpu_wio ?? 0;
         namenodeRpc.value = temp[0].host_components[0].metrics?.rpc ? (temp[0].host_components[0].metrics.rpc.client.RpcQueueTime_avg_time).toFixed(2) : 0;
-        const now = Date.now();        
 
-        const waktuNameNode = temp[0].host_components[0].metrics?.runtime ? temp[0].host_components[0].metrics.runtime.StartTime : now
-        const namenodeDifTime = now - waktuNameNode;
-        const nDay = Math.floor(namenodeDifTime / millisecondsInDay);
-        const nHour = Math.floor((namenodeDifTime % millisecondsInDay) / millisecondsInHour);
-        const nMinute = Math.floor((namenodeDifTime % millisecondsInHour) / millisecondsInMinute);
-        namenodeTime.value = ''
-        if (nDay > 0)
-            namenodeTime.value += nDay + 'd '
-        if (nHour > 0)
-            namenodeTime.value += nHour + 'h '
-        if (nMinute > 0)
-            namenodeTime.value += nMinute + 'm '
-        namenodeTime.value = namenodeTime.value || 'n/a'
-        setDiskUsageChartOptions(diskUsage.value);
+        const now = Date.now();
+        const startTime = temp[0].host_components[0].metrics?.runtime?.StartTime || now;
+        const diff = now - startTime;
+        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        namenodeTime.value = d > 0 ? `${d}d ${h}h ${m}m` : `${h}h ${m}m`;
+
     } catch (error) {
-        if (error.status == 401) {
-            authStore.clearToken();
-            router.push('/auth/login');
-        }
-        console.error(error);
+        console.error("Error fetching metrics:", error);
     }
 };
-
-function setDiskUsageChartOptions(data) {
-    const labels = ['Used', 'Remaining'];
-    const values = data;
-
-    diskUsageChartData.value = {
-        labels: labels,
-        datasets: [
-            {
-                data: values,
-                backgroundColor: ['#FF6384', '#DDDDDD']
-            }
-        ]
-    };
-}
 
 onMounted(() => {
     fetchData();
@@ -115,65 +104,57 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="p-4">
-        <div class="flex gap-2 mb-4 ">
-            <button 
-                @click="activeTab = 'summary'"
-                :class="['tab-btn', activeTab === 'summary' ? 'active' : '']"
-            >
+    <div>
+        <div class="flex items-center mb-6 border-b border-gray-200">
+            <button @click="activeTab = 'summary'" :class="['tab-btn', activeTab === 'summary' ? 'active' : '']">
                 Status
             </button>
-            <button 
-                @click="activeTab = 'instance'"
-                :class="['tab-btn', activeTab === 'instance' ? 'active' : '']"
-            >
+            <button @click="activeTab = 'instances'" :class="['tab-btn', activeTab === 'instances' ? 'active' : '']">
                 Instances
             </button>
-            <button 
-                @click="activeTab = 'configuration'"
-                :class="['tab-btn', activeTab === 'configuration' ? 'active' : '']"
-            >
+            <button @click="activeTab = 'configurations'" :class="['tab-btn', activeTab === 'configurations' ? 'active' : '']">
                 Configuration
             </button>
-            <button 
-                @click="activeTab = 'metrics'"
-                :class="['tab-btn', activeTab === 'metrics' ? 'active' : '']"
-            >
+            <button @click="activeTab = 'metrics'" :class="['tab-btn', activeTab === 'metrics' ? 'active' : '']">
                 Metrics
             </button>
+            
             <button 
-                @click="activeTab = 'links'"
-                :class="['tab-btn', activeTab === 'links' ? 'active' : '']"
+                type="button" 
+                class="tab-btn flex items-center gap-2"
+                @click="toggleMenu" 
+                aria-haspopup="true" 
+                aria-controls="overlay_menu"
             >
                 Quick Links
             </button>
+            <Menu ref="menu" id="overlay_menu" :model="formattedLinks" :popup="true" />
         </div>
 
         <div class="tab-container">
             <SummaryTab v-if="activeTab === 'summary'" />
-            <Metrics
-                v-if="activeTab === 'metrics'"
-                :diskUsage="diskUsage" 
-                :hdfsUsage="hdfsUsage" 
-                :nameNodeHeap="nameNodeHeap" 
-                :dataNodes="dataNodes" 
-                :liveDataNodes="liveDataNodes" 
-                :namenodeRpc="namenodeRpc" 
-                :namenodeCpuWio="namenodeCpuWio"
-                :namenodeTime="namenodeTime" 
-            />            
-            <QuickLinksTab 
-                v-if="activeTab === 'links'" 
-                :links="links" 
-                :loading="loading" 
-            />
+            <Instances v-if="activeTab === 'instances'" />
+            <Configurations v-if="activeTab === 'configurations'" />
+
+            <div v-if="activeTab === 'metrics'">
+                <Metrics
+                    :diskUsage="diskUsage" 
+                    :hdfsUsage="hdfsUsage" 
+                    :nameNodeHeap="nameNodeHeap" 
+                    :dataNodes="dataNodes" 
+                    :liveDataNodes="liveDataNodes" 
+                    :namenodeRpc="namenodeRpc" 
+                    :namenodeCpuWio="namenodeCpuWio"
+                    :namenodeTime="namenodeTime" 
+                />
+            </div>
         </div>
     </div>
 </template>
 
 <style scoped lang="scss">
 .tab-btn {
-    padding: 0.5rem 1.5rem;
+    padding: 0.75rem 1.5rem;
     border: none;
     background: none;
     cursor: pointer;
@@ -181,14 +162,16 @@ onMounted(() => {
     color: #6c757d;
     border-bottom: 2px solid transparent;
     transition: all 0.2s;
+    outline: none;
 
     &.active {
         color: #1BA9E1;
         border-bottom: 2px solid #1BA9E1;
     }
     
-    &:hover:not(.active) {
+    &:hover {
         background: #f8f9fa;
+        color: #333;
     }
 }
 </style>

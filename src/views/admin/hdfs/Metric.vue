@@ -1,8 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { useAuthStore } from '@/stores/authStore';
 
-const authStore = useAuthStore();
 const props = defineProps({
     diskUsage: Array,
     hdfsUsage: [Number, String], 
@@ -32,14 +30,20 @@ const handleClickMenu = (service) => {
 
 <template>
     <div class="row">
-
         <div class="column-right">
-            <div class="grid grid-cols-12 gap-8">
-                <div class="col-span-12 xl:col-span-4">
-                    <Select v-model="selectedTime" :options="times" optionValue="code" optionLabel="name"
-                        @change="handleTimeChange" style="max-width: 150px; float: right;" class="w-full" />
-                </div>
+            <div class="flex justify-end mb-4">
+                <Select 
+                    v-model="selectedTime" 
+                    :options="times" 
+                    optionValue="code" 
+                    optionLabel="name"
+                    @change="handleTimeChange" 
+                    style="min-width: 150px" 
+                    class="w-full md:w-auto" 
+                />
+            </div>
 
+            <div class="grid grid-cols-12 gap-8">
                 <div class="col-span-12 xl:col-span-4">
                     <div class="card">
                         <div class="font-semibold text-xl mb-4">HDFS Disk Usage</div>
