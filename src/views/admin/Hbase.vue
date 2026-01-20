@@ -1,97 +1,166 @@
 <script setup>
-import { useLayout } from '@/layout/composables/layout';
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import axiosInstancesPython from '@/axiosInstancesPython';
 import { useAuthStore } from '@/stores/authStore';
 
-const authStore = useAuthStore();
-const links = ref([]);
+import SummaryTab from './hbase/SummaryTab.vue';
+import Metrics from './hbase/Metric.vue';
+import Configurations from './hbase/Configurations.vue';
+import { formatUptime } from '@/utils/formatters';
 
-const fetchQuickLink = async () => {
+const authStore = useAuthStore();
+const router = useRouter();
+
+const menu = ref(null);
+const formattedLinks = ref([]); 
+const loading = ref(false);
+const activeTab = ref('summary');
+
+const diskUsage = ref([]);
+const hdfsUsage = ref(null);
+const nameNodeHeap = ref(null);
+const dataNodes = ref(0);
+const liveDataNodes = ref(0);
+const namenodeRpc = ref(0);
+const namenodeCpuWio = ref(0);
+const namenodeTime = ref('');
+
+const toggleMenu = (event) => {
+    menu.value.toggle(event);
+};
+
+const fetchData = async () => {
+    loading.value = true;
     try {
         const response = await axiosInstancesPython.get('/quicklink', {
-            params: {
-                service: 'HBASE'
-            }
+            params: { service: 'HBASE' }
         });
-        links.value = response.data.items[0].QuickLinkInfo.quicklink_data.QuickLinksConfiguration.configuration.links;
+        
+        const rawLinks = response.data.items[0].QuickLinkInfo.quicklink_data.QuickLinksConfiguration.configuration.links;
+        formattedLinks.value = rawLinks.map(link => ({
+            label: link.label,
+            icon: 'pi pi-external-link',
+            command: () => {
+                window.open(link.url, '_blank');
+            }
+        }));
+        
     } catch (error) {
-        if (error.status == 401) {
+        if (error.response?.status === 401) {
             authStore.clearToken();
             router.push('/auth/login');
         }
-        console.error(error);
+    } finally {
+        loading.value = false;
+    }
+};
+
+const fetchServiceInfo = async () => {
+    try {
+        const response = await axiosInstancesPython.get('/service-info');
+        let temp = response.data.items.filter((item) => 
+            item.ServiceComponentInfo.service_name == 'HDFS' && 
+            item.ServiceComponentInfo.component_name == 'NAMENODE'
+        );
+
+        let tempHeap1 = temp[0]?.host_components[0]?.metrics?.jvm ? ((temp[0].host_components[0].metrics.jvm.HeapMemoryUsed / temp[0].host_components[0].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0;
+        let tempHeap2 = temp[0]?.host_components[1]?.metrics?.jvm ? ((temp[0].host_components[1].metrics.jvm.HeapMemoryUsed / temp[0].host_components[1].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0;
+        nameNodeHeap.value = tempHeap1 != 0 ? tempHeap1 : tempHeap2;
+
+        if (temp[0]?.host_components[0]?.metrics?.dfs) {
+            const dfs = temp[0].host_components[0].metrics.dfs.FSNamesystem;
+            const used = ((dfs.CapacityTotalGB - dfs.CapacityRemainingGB) / dfs.CapacityTotalGB * 100).toFixed(0);
+            hdfsUsage.value = used;
+            diskUsage.value = [used, (100 - used)];
+            
+            let liveNodes = JSON.parse(temp[0].host_components[0].metrics.dfs.namenode.LiveNodes);
+            let arrLiveNodes = Object.values(liveNodes);
+            dataNodes.value = arrLiveNodes.length;
+            liveDataNodes.value = arrLiveNodes.filter(n => n.adminState === "In Service").length;
+        }
+
+        const hostComp = (temp[0].host_components[1]?.metrics) || (temp[0].host_components[0]?.metrics);
+        namenodeCpuWio.value = hostComp?.cpu?.cpu_wio ?? 0;
+        namenodeRpc.value = temp[0].host_components[0].metrics?.rpc ? (temp[0].host_components[0].metrics.rpc.client.RpcQueueTime_avg_time).toFixed(2) : 0;
+        namenodeTime.value = formatUptime(temp[0].host_components[0].metrics?.runtime?.StartTime);
+
+    } catch (error) {
+        console.error("Error fetching metrics:", error);
     }
 };
 
 onMounted(() => {
-    fetchQuickLink();
+    fetchData();
+    fetchServiceInfo();
 });
-
-
 </script>
 
 <template>
-    <div class="row">
-        <div class="column-left">
-            <div class="col-span-12">
-                <div>
-                    <div class="font-semibold text-xl mt-2 ml-2 mb-2">Summary</div>
-                </div>
-            </div>
-            <div class="mb-4">
-                <div class="card" style="height: 77vh;">
-
-                </div>
-            </div>
+    <div>
+        <div class="flex items-center mb-6 border-b border-gray-200">
+            <button @click="activeTab = 'summary'" :class="['tab-btn', activeTab === 'summary' ? 'active' : '']">
+                Status
+            </button>
+            <button @click="activeTab = 'configurations'" :class="['tab-btn', activeTab === 'configurations' ? 'active' : '']">
+                Configuration
+            </button>
+            <button @click="activeTab = 'metrics'" :class="['tab-btn', activeTab === 'metrics' ? 'active' : '']">
+                Metrics
+            </button>
+            
+            <button 
+                type="button" 
+                class="tab-btn flex items-center gap-2"
+                @click="toggleMenu" 
+                aria-haspopup="true" 
+                aria-controls="overlay_menu"
+            >
+                Quick Links
+            </button>
+            <Menu ref="menu" id="overlay_menu" :model="formattedLinks" :popup="true" />
         </div>
-        <div class="column-right">
-            <div class="col-span-12">
-                <div>
-                    <div class="font-semibold text-xl mt-2 ml-2 mb-2">Quick Links</div>
-                </div>
-            </div>
-            <div class="card" style="height: 77vh;">
-                <DataTable ref="dt" :value="links" dataKey="id" :paginator="false" :rows="links.length" style="border-color: transparent !important;"
-                    :totalRecords="links.length" :loading="loading" class="mb-4">
-                    <template style="border-color: transparent !important;" #empty> Data not found. </template>
-                    <template style="border-color: transparent !important;" #loading> Loading data. Please wait. </template>
-                    <Column style="border-color: transparent !important; padding: 3px !important;">
-                        <template #body="{ data }">
-                            <div class="flex items-center gap-2">
-                                <a href="" style="color: #1BA9E1;">{{ data.label }}</a>
-                            </div>
-                        </template>
-                    </Column>
-                </DataTable>
+
+        <div class="tab-container">
+            <SummaryTab v-if="activeTab === 'summary'" />
+            <Configurations v-if="activeTab === 'configurations'" />
+
+            <div v-if="activeTab === 'metrics'">
+                <Metrics
+                    :diskUsage="diskUsage" 
+                    :hdfsUsage="hdfsUsage" 
+                    :nameNodeHeap="nameNodeHeap" 
+                    :dataNodes="dataNodes" 
+                    :liveDataNodes="liveDataNodes" 
+                    :namenodeRpc="namenodeRpc" 
+                    :namenodeCpuWio="namenodeCpuWio"
+                    :namenodeTime="namenodeTime" 
+                />
             </div>
         </div>
     </div>
 </template>
 
 <style scoped lang="scss">
-.column-left {
-    float: left;
-    width: 75%;
-    padding-right: 2rem;
-}
+.tab-btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-weight: 600;
+    color: #6c757d;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    outline: none;
 
-.column-right {
-    float: left;
-    width: 25%;
-}
-
-.row:after {
-    content: "";
-    display: table;
-    clear: both;
-}
-
-@media screen and (max-width: 600px) {
-
-    .column-left,
-    .column-right {
-        width: 100%;
+    &.active {
+        color: #1BA9E1;
+        border-bottom: 2px solid #1BA9E1;
+    }
+    
+    &:hover {
+        background: #f8f9fa;
+        color: #333;
     }
 }
 </style>

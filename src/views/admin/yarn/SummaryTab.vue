@@ -10,22 +10,25 @@ const router = useRouter();
 const loading = ref(false);
 const dataSummary = ref([]);
 const namenodeSummary = ref([]);
+const nodeManager = ref([]);
 
 const fetchSummary = async () => {
   loading.value = true;
   try {
     const { data } = await axiosInstancesPython.get('/service-instances');
-    const hdfsService = data?.items?.find(
-      item => item?.ServiceInfo?.service_name === 'HDFS'
+    const yarnService = data?.items?.find(
+      item => item?.ServiceInfo?.service_name === 'YARN'
     );
-    if (!hdfsService) {
+    if (!yarnService) {
       dataSummary.value = [];
       namenodeSummary.value = [];
       return;
     }
-    dataSummary.value = [hdfsService];
+    dataSummary.value = [yarnService];
+    nodeManager.value = JSON.parse(dataSummary.value[0].components[2].ServiceComponentInfo.rm_metrics.cluster.nodeManagers)
+    console.log(nodeManager.value)
     namenodeSummary.value =
-      hdfsService.components?.filter(
+      yarnService.components?.filter(
         component =>
           component?.ServiceComponentInfo?.component_name === 'NAMENODE'
       ) || [];
@@ -97,22 +100,19 @@ const getStatusCounter = (info) => {
   return `0/${total}`;
 };
 
-
-
 onMounted(() => {
   fetchSummary();
 });
 </script>
 
-
 <template>
   <div class="w-full space-y-4">
 
     <div class="card w-full p-5">
-      <div class="font-semibold text-lg mb-4">HDFS Summary</div>
+      <div class="font-semibold text-lg mb-4">Summary</div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-y-2 text-sm">
-        <div>Total Capacity</div>
+        <div>Resource Manager Uptime</div>
         <div class="font-medium">
           {{
             getNameNodeInfo()
@@ -121,7 +121,7 @@ onMounted(() => {
           }}
         </div>
 
-        <div>DFS Used</div>
+        <div>Available Memory</div>
         <div class="font-medium text-red-500">
           {{
             getNameNodeInfo()
@@ -142,7 +142,7 @@ onMounted(() => {
           </span>
         </div>
 
-        <div>Non DFS Used</div>
+        <div>Used Memory</div>
         <div class="font-medium text-red-500">
           {{
             getNameNodeInfo()
@@ -162,29 +162,40 @@ onMounted(() => {
             )
           </span>
         </div>
-
-        <div>Free</div>
-        <div class="font-medium text-green-500">
-          {{
-            getNameNodeInfo()
-              ? formatStorage(getNameNodeInfo().CapacityRemaining)
-              : '0.00 MB'
-          }}
-          <span class="text-xs text-gray-500">
-            (
-            {{
-              getNameNodeInfo()
-                ? formatPercentage(
-                  getNameNodeInfo().CapacityRemaining,
-                  getNameNodeInfo().CapacityTotal
-                )
-                : '0.00%'
-            }}
-            )
-          </span>
-        </div>
       </div>
     </div>
+
+    <div class="card w-full p-5">
+  <div class="font-semibold text-lg mb-4">Node Manager Status</div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-y-2 text-sm">
+    <template v-for="(node, index) in nodeManager">
+      <!-- Hostname -->
+      <div>
+        {{ node.HostName }}
+      </div>
+
+      <!-- Status + detail -->
+      <div
+        class="font-medium flex flex-col md:flex-row md:items-center md:gap-3"
+        :class="getStateClass(node.State)"
+      >
+        <span>
+          {{ node.State }}
+        </span>
+
+        <span class="text-xs text-gray-500">
+          Containers: {{ node.NumContainers }}
+          |
+          Used: {{ node.UsedMemoryMB }} MB
+          /
+          Avail: {{ node.AvailableMemoryMB }} MB
+        </span>
+      </div>
+    </template>
+  </div>
+</div>
+
 
     <div class="card w-full p-5">
       <div class="font-semibold text-lg mb-4">Status</div>

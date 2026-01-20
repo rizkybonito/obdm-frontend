@@ -4,31 +4,33 @@ import axiosInstancesPython from '@/axiosInstancesPython';
 import { useRouter } from 'vue-router';
 
 import { useAuthStore } from '@/stores/authStore';
+import { formatUptime } from '@/utils/formatters';
 const authStore = useAuthStore();
 
 const router = useRouter();
 const loading = ref(false);
 const dataSummary = ref([]);
-const namenodeSummary = ref([]);
+const hbaseSummary = ref([]);
 
 const fetchSummary = async () => {
   loading.value = true;
   try {
     const { data } = await axiosInstancesPython.get('/service-instances');
     const hdfsService = data?.items?.find(
-      item => item?.ServiceInfo?.service_name === 'HDFS'
+      item => item?.ServiceInfo?.service_name === 'HBASE'
     );
     if (!hdfsService) {
       dataSummary.value = [];
-      namenodeSummary.value = [];
+      hbaseSummary.value = [];
       return;
     }
     dataSummary.value = [hdfsService];
-    namenodeSummary.value =
+    hbaseSummary.value =
       hdfsService.components?.filter(
         component =>
-          component?.ServiceComponentInfo?.component_name === 'NAMENODE'
+          component?.ServiceComponentInfo?.component_name === 'HBASE_MASTER'
       ) || [];
+    console.log(hbaseSummary.value)
 
   } catch (error) {
     if (error?.response?.status === 401) {
@@ -60,9 +62,9 @@ const formatPercentage = (value, total) => {
   return `${((value / total) * 100).toFixed(2)}%`;
 };
 
-const getNameNodeInfo = () => {
-  return namenodeSummary.value.length
-    ? namenodeSummary.value[0].ServiceComponentInfo
+const getHbaseInfo = () => {
+  return hbaseSummary.value.length
+    ? hbaseSummary.value[0].ServiceComponentInfo
     : null;
 };
 
@@ -109,79 +111,47 @@ onMounted(() => {
   <div class="w-full space-y-4">
 
     <div class="card w-full p-5">
-      <div class="font-semibold text-lg mb-4">HDFS Summary</div>
+      <div class="font-semibold text-lg mb-4">Summary</div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-y-2 text-sm">
-        <div>Total Capacity</div>
+        <div>Master Started</div>
         <div class="font-medium">
           {{
-            getNameNodeInfo()
-              ? formatStorage(getNameNodeInfo().CapacityTotal)
+            getHbaseInfo()
+              ? formatUptime(getHbaseInfo().MasterStartTime)
+              : '0 Minute'
+          }}
+        </div>
+
+        <div>Master Activated</div>
+        <div class="font-medium">
+          {{
+            getHbaseInfo()
+              ? formatUptime(getHbaseInfo().MasterActiveTime)
               : '0.00 MB'
           }}
         </div>
 
-        <div>DFS Used</div>
-        <div class="font-medium text-red-500">
+        <div>Average Load</div>
+        <div class="font-medium">
           {{
-            getNameNodeInfo()
-              ? formatStorage(getNameNodeInfo().CapacityUsed)
-              : '0.00 MB'
+            getHbaseInfo()
+              ? getHbaseInfo().AverageLoad
+              : '0.00'
           }}
-          <span class="text-xs text-gray-500">
-            (
-            {{
-              getNameNodeInfo()
-                ? formatPercentage(
-                  getNameNodeInfo().CapacityUsed,
-                  getNameNodeInfo().CapacityTotal
-                )
-                : '0.00%'
-            }}
-            )
-          </span>
         </div>
 
-        <div>Non DFS Used</div>
-        <div class="font-medium text-red-500">
+        <div>Master Heap</div>
+        <div class="font-medium">
           {{
-            getNameNodeInfo()
-              ? formatStorage(getNameNodeInfo().NonDfsUsedSpace)
-              : '0.00 MB'
-          }}
-          <span class="text-xs text-gray-500">
-            (
-            {{
-              getNameNodeInfo()
-                ? formatPercentage(
-                  getNameNodeInfo().NonDfsUsedSpace,
-                  getNameNodeInfo().CapacityTotal
-                )
-                : '0.00%'
-            }}
-            )
-          </span>
-        </div>
+            getHbaseInfo()
+              ? formatPercentage(
+                getHbaseInfo().HeapMemoryUsed,
+                getHbaseInfo().HeapMemoryMax
+              )
+              : '0.00%'
 
-        <div>Free</div>
-        <div class="font-medium text-green-500">
-          {{
-            getNameNodeInfo()
-              ? formatStorage(getNameNodeInfo().CapacityRemaining)
-              : '0.00 MB'
-          }}
-          <span class="text-xs text-gray-500">
-            (
-            {{
-              getNameNodeInfo()
-                ? formatPercentage(
-                  getNameNodeInfo().CapacityRemaining,
-                  getNameNodeInfo().CapacityTotal
-                )
-                : '0.00%'
-            }}
-            )
-          </span>
+          }} %
         </div>
       </div>
     </div>

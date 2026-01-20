@@ -8,6 +8,7 @@ import SummaryTab from './hdfs/SummaryTab.vue';
 import Metrics from './hdfs/Metric.vue';
 import Instances from './hdfs/Instances.vue';
 import Configurations from './hdfs/Configurations.vue';
+import { formatUptime } from '@/utils/formatters';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -83,14 +84,8 @@ const fetchServiceInfo = async () => {
         const hostComp = (temp[0].host_components[1]?.metrics) || (temp[0].host_components[0]?.metrics);
         namenodeCpuWio.value = hostComp?.cpu?.cpu_wio ?? 0;
         namenodeRpc.value = temp[0].host_components[0].metrics?.rpc ? (temp[0].host_components[0].metrics.rpc.client.RpcQueueTime_avg_time).toFixed(2) : 0;
-
         const now = Date.now();
-        const startTime = temp[0].host_components[0].metrics?.runtime?.StartTime || now;
-        const diff = now - startTime;
-        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        namenodeTime.value = d > 0 ? `${d}d ${h}h ${m}m` : `${h}h ${m}m`;
+        namenodeTime.value = formatUptime(temp[0].host_components[0].metrics?.runtime?.StartTime)|| n
 
     } catch (error) {
         console.error("Error fetching metrics:", error);

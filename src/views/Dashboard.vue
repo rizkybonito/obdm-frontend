@@ -5,7 +5,7 @@ import axiosInstancesPython from '@/axiosInstancesPython';
 import { useAuthStore } from '@/stores/authStore';
 import { useUtilStore } from '@/stores/utilStore';
 import { useRouter } from 'vue-router';
-import { Table } from 'ckeditor5';
+import { formatUptime } from '@/utils/formatters';
 
 const router = useRouter();
 
@@ -102,7 +102,40 @@ const fetchMenu = async () => {
         const response = await axiosInstancesPython.get('/menu');
         let temp = response.data.items;
         utilStore.setMenu(temp);
-        menu.value = temp.filter(item => item.components[0].StackServiceComponents.is_master == true)
+        
+        let filteredMenu = temp.filter(item => 
+            item.components && 
+            item.components[0] && 
+            item.components[0].StackServiceComponents.is_master == true
+        );
+
+        const hardcodedItems = [
+            {
+                StackServices: {
+                    service_name: 'HDFS',
+                    display_name: 'HDFS'
+                },
+                id: 'hardcoded-hdfs' 
+            },
+            {
+                StackServices: {
+                    service_name: 'HBASE',
+                    display_name: 'HBase'
+                },
+                id: 'hardcoded-hbase'
+            }
+        ];
+
+        const combinedMenu = [...hardcodedItems];
+        
+        filteredMenu.forEach(item => {
+            if (!combinedMenu.find(h => h.StackServices.service_name === item.StackServices.service_name)) {
+                combinedMenu.push(item);
+            }
+        });
+
+        menu.value = combinedMenu;
+
     } catch (error) {
         if (error.status == 401) {
             authStore.clearToken();
@@ -112,100 +145,62 @@ const fetchMenu = async () => {
     }
 };
 
+const calculateHeap = (hostComp) => {
+    const jvm = hostComp?.metrics?.jvm;
+    if (!jvm || !jvm.HeapMemoryMax) return 0;
+    return ((jvm.HeapMemoryUsed / jvm.HeapMemoryMax) * 100).toFixed(0);
+};
+
 const fetchServiceInfo = async () => {
     try {
-        const response = await axiosInstancesPython.get('/service-info');
-        let temp = response.data.items.filter((item) => item.ServiceComponentInfo.service_name == 'HDFS' && item.ServiceComponentInfo.component_name == 'NAMENODE');
-        let tempNameNodeHeap1 = temp[0]?.host_components[0]?.metrics?.jvm ? ((temp[0].host_components[0].metrics.jvm.HeapMemoryUsed / temp[0].host_components[0].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0.00
-        let tempNameNodeHeap2 = temp[0]?.host_components[1]?.metrics?.jvm ? ((temp[0].host_components[1].metrics.jvm.HeapMemoryUsed / temp[0].host_components[1].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0.00
-        nameNodeHeap.value = tempNameNodeHeap1 != 0.00 ? tempNameNodeHeap1 : tempNameNodeHeap2;
-        let tempRM = response.data.items.filter((item) => item.ServiceComponentInfo.service_name == 'YARN' && item.ServiceComponentInfo.component_name == 'RESOURCEMANAGER');
-        let tempRMHeap1 = tempRM[0]?.host_components[0]?.metrics?.jvm ? ((tempRM[0].host_components[0].metrics.jvm.HeapMemoryUsed / tempRM[0].host_components[0].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0.00
-        let tempRMHeap2 = tempRM[0]?.host_components[1]?.metrics?.jvm ? ((tempRM[0].host_components[1].metrics.jvm.HeapMemoryUsed / tempRM[0].host_components[1].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0.00
-        resourceManagerHeap.value = tempRMHeap1 != 0.00 ? tempRMHeap1 : tempRMHeap2;
-        let tempAveLoad = response.data.items.filter((item) => item.ServiceComponentInfo.service_name == 'HBASE' && item.ServiceComponentInfo.component_name == 'HBASE_MASTER');
-        let tempHbase1 = tempAveLoad[0].host_components[0]?.metrics ? (tempAveLoad[0].host_components[0].metrics.hbase.master.AverageLoad).toFixed(2) : 0.00
-        let tempHbase2 = tempAveLoad[0].host_components[1]?.metrics ? (tempAveLoad[0].host_components[1].metrics.hbase.master.AverageLoad).toFixed(2) : 0.00
-        let tempMasterHeap1 = tempAveLoad[0].host_components[0]?.metrics ? ((tempAveLoad[0].host_components[0].metrics.jvm.HeapMemoryUsed / tempAveLoad[0].host_components[0].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0.00
-        let tempMasterHeap2 = tempAveLoad[0].host_components[1]?.metrics ? ((tempAveLoad[0].host_components[1].metrics.jvm.HeapMemoryUsed / tempAveLoad[0].host_components[1].metrics.jvm.HeapMemoryMax) * 100).toFixed(0) : 0.00
-        hbaseAveLoad.value = tempHbase1 != 0.00 ? tempHbase1 : tempHbase2
-        diskUsage.value.push(temp[0].host_components[0]?.metrics?.dfs ? (temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityTotalGB - temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityRemainingGB) / temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityTotalGB * 100 : 0);
-        hdfsUsage.value = temp[0].host_components[0]?.metrics?.dfs ? ((temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityTotalGB - temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityRemainingGB) / temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityTotalGB * 100).toFixed() : 0;
-        hdfsMasterHeap.value = tempHbase1 != 0.00 ? tempMasterHeap1 : tempMasterHeap2;
-        diskUsage.value.push(temp[0].host_components[0]?.metrics?.dfs ? temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityRemainingGB / temp[0].host_components[0].metrics.dfs.FSNamesystem.CapacityTotalGB * 100 : 0);
-        if (temp[0].host_components[0].metrics?.dfs) {
-            let strLiveNodes = temp[0].host_components[0].metrics.dfs.namenode.LiveNodes;
-            let tempLiveNodes = JSON.parse(strLiveNodes)
-            let arrLiveNodes = Object.values(tempLiveNodes)
-            let tempLive = arrLiveNodes.filter(live => live.adminState == "In Service");
-            dataNodes.value = arrLiveNodes.length
-            liveDataNodes.value = tempLive.length
+        const { data } = await axiosInstancesPython.get('/service-info');
+        const items = data?.items || [];
+        
+        const hdfsNode = items.find(i => i.ServiceComponentInfo.service_name === 'HDFS' && i.ServiceComponentInfo.component_name === 'NAMENODE');
+        const yarnNode = items.find(i => i.ServiceComponentInfo.service_name === 'YARN' && i.ServiceComponentInfo.component_name === 'RESOURCEMANAGER');
+        const hbaseNode = items.find(i => i.ServiceComponentInfo.service_name === 'HBASE' && i.ServiceComponentInfo.component_name === 'HBASE_MASTER');
+        const getBestHeap = (node) => {
+            const h1 = calculateHeap(node?.host_components?.[0]);
+            const h2 = calculateHeap(node?.host_components?.[1]);
+            return h1 !== "0" ? h1 : h2;
+        };
+        nameNodeHeap.value = getBestHeap(hdfsNode);
+        resourceManagerHeap.value = getBestHeap(yarnNode);
+        const hbase1 = hbaseNode?.host_components?.[0]?.metrics?.hbase?.master?.AverageLoad || 0;
+        const hbase2 = hbaseNode?.host_components?.[1]?.metrics?.hbase?.master?.AverageLoad || 0;
+        hbaseAveLoad.value = (hbase1 || hbase2).toFixed(2);
+        const masterH1 = calculateHeap(hbaseNode?.host_components?.[0]);
+        const masterH2 = calculateHeap(hbaseNode?.host_components?.[1]);
+        hdfsMasterHeap.value = hbase1 !== 0 ? masterH1 : masterH2;
+        const hdfsMetrics = hdfsNode?.host_components?.[0]?.metrics?.dfs?.FSNamesystem;
+        if (hdfsMetrics) {
+            const used = hdfsMetrics.CapacityTotalGB - hdfsMetrics.CapacityRemainingGB;
+            const usagePercent = (used / hdfsMetrics.CapacityTotalGB) * 100;
+            const remainingPercent = (hdfsMetrics.CapacityRemainingGB / hdfsMetrics.CapacityTotalGB) * 100;
+            
+            hdfsUsage.value = usagePercent.toFixed(0);
+            diskUsage.value = [usagePercent, remainingPercent]; 
         }
-        else {
-            dataNodes.value = 0
-            liveDataNodes.value = 0
+        const liveNodesStr = hdfsNode?.host_components?.[0]?.metrics?.dfs?.namenode?.LiveNodes;
+        if (liveNodesStr) {
+            const nodes = Object.values(JSON.parse(liveNodesStr));
+            dataNodes.value = nodes.length;
+            liveDataNodes.value = nodes.filter(n => n.adminState === "In Service").length;
         }
-        const hostComponent = (temp[0].host_components[1] && temp[0].host_components[1].metrics) ||
-            (temp[0].host_components[0] && temp[0].host_components[0].metrics);
-
-        const namenodeCpuWioValue = hostComponent?.cpu?.cpu_wio ?? 0;
-
-        namenodeCpuWio.value = namenodeCpuWioValue;
-        namenodeRpc.value = temp[0].host_components[0].metrics?.rpc ? (temp[0].host_components[0].metrics.rpc.client.RpcQueueTime_avg_time).toFixed(2) : 0;
-        const now = Date.now();
-        const waktuHbase = tempAveLoad[0].host_components[0]?.metrics ? tempAveLoad[0].host_components[0].metrics.hbase.master.MasterStartTime : tempAveLoad[0].host_components[1]?.metrics ? tempAveLoad[0].host_components[1].metrics.hbase.master.MasterStartTime : now
-        const differenceInMilliseconds = now - waktuHbase;
-        const millisecondsInDay = 1000 * 60 * 60 * 24;
-        const millisecondsInHour = 1000 * 60 * 60;
-        const millisecondsInMinute = 1000 * 60;
-        const hDay = Math.floor(differenceInMilliseconds / millisecondsInDay);
-        const hHour = Math.floor((differenceInMilliseconds % millisecondsInDay) / millisecondsInHour);
-        const hMinute = Math.floor((differenceInMilliseconds % millisecondsInHour) / millisecondsInMinute);
-        hbaseTime.value = ''
-        if (hDay > 0)
-            hbaseTime.value += hDay + 'd '
-        if (hHour > 0)
-            hbaseTime.value += hHour + 'h '
-        if (hMinute > 0)
-            hbaseTime.value += hMinute + 'm '
-        if (hbaseTime.value == '')
-            hbaseTime.value = 'n/a'
-
-        const waktuNameNode = temp[0].host_components[0].metrics?.runtime ? temp[0].host_components[0].metrics.runtime.StartTime : now
-        const namenodeDifTime = now - waktuNameNode;
-        const nDay = Math.floor(namenodeDifTime / millisecondsInDay);
-        const nHour = Math.floor((namenodeDifTime % millisecondsInDay) / millisecondsInHour);
-        const nMinute = Math.floor((namenodeDifTime % millisecondsInHour) / millisecondsInMinute);
-        namenodeTime.value = ''
-        if (nDay > 0)
-            namenodeTime.value += nDay + 'd '
-        if (nHour > 0)
-            namenodeTime.value += nHour + 'h '
-        if (nMinute > 0)
-            namenodeTime.value += nMinute + 'm '
-        namenodeTime.value = namenodeTime.value || 'n/a'
-
-        const waktuYarn = tempRM[0]?.host_components[0]?.metrics ? tempRM[0].host_components[0].metrics.runtime.StartTime : now
-        const yarnDifTime = now - waktuYarn;
-        const yDay = Math.floor(yarnDifTime / millisecondsInDay);
-        const yHour = Math.floor((yarnDifTime % millisecondsInDay) / millisecondsInHour);
-        const yMinute = Math.floor((yarnDifTime % millisecondsInHour) / millisecondsInMinute);
-        yarnTime.value = ''
-        if (yDay > 0)
-            yarnTime.value += yDay + 'd '
-        if (nHour > 0)
-            yarnTime.value += yHour + 'h '
-        if (nMinute > 0)
-            yarnTime.value += yMinute + 'm '
-        yarnTime.value = yarnTime.value || 'n/a'
-
+        const activeHost = hdfsNode?.host_components?.find(hc => hc.metrics) || hdfsNode?.host_components?.[0];
+        namenodeCpuWio.value = activeHost?.metrics?.cpu?.cpu_wio ?? 0;
+        namenodeRpc.value = activeHost?.metrics?.rpc?.client?.RpcQueueTime_avg_time?.toFixed(2) || 0;
+        hbaseTime.value = formatUptime(hbaseNode?.host_components?.[0]?.metrics?.hbase?.master?.MasterStartTime);
+        namenodeTime.value = formatUptime(hdfsNode?.host_components?.[0]?.metrics?.runtime?.StartTime);
+        yarnTime.value = formatUptime(yarnNode?.host_components?.[0]?.metrics?.runtime?.StartTime);
         setDiskUsageChartOptions(diskUsage.value);
+
     } catch (error) {
-        if (error.status == 401) {
+        if (error.response?.status === 401) {
             authStore.clearToken();
             router.push('/auth/login');
         }
-        console.error(error);
+        console.error("Failed to fetch service info:", error);
     }
 };
 
